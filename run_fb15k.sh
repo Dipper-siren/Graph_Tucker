@@ -1,0 +1,1 @@
+python main.py --dataset FB15k-237 --num_iterations 800  --batch_size 128  --lr 0.0005 --dr 1.0 --edim 200 --rdim 200 --input_dropout 0.3    --hidden_dropout1 0.4 --hidden_dropout2 0.5 --label_smoothing 0.1 --loss_weight 2.5 --bias 0.2
