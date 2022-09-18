@@ -8,7 +8,7 @@ class TuckER(torch.nn.Module):
         super(TuckER, self).__init__()
 
         self.E = torch.nn.Embedding(len(d.entities), d1, max_norm=2, norm_type=3)
-        self.graph_E = torch.nn.Embedding(len(d.entities), d1)
+        self.graph_E = torch.nn.Embedding(len(d.entities), d1, max_norm=2, norm_type=3)   # 上下文相关的辅助嵌入量。
         # self.graph_E = torch.zeros((len(d.entities), d1))
         self.R_low = torch.nn.Embedding(len(d.relations), d2)
         # self.R_high = torch.nn.Embedding(len(d.relations), d2)
@@ -48,7 +48,7 @@ class TuckER(torch.nn.Module):
         W_mat = self.hidden_dropout1(W_mat)
 
         x = torch.bmm(x, W_mat) 
-        x = x.view(-1, e1.size(1))      
+        x = x.view(-1, e1.size(1))
         x = self.bn1(x)
         x = self.hidden_dropout2(x)
         x = torch.mm(x, self.E.weight.transpose(1, 0))
@@ -83,7 +83,7 @@ class TuckER(torch.nn.Module):
         # self.W = self.W_low + self.W_high
         temp1 = self.E(e1_idx)
         temp2 = self.graph_E(e1_idx)
-        graph_E = (temp1 + temp2) / 2
+        graph_E = 0.9 * temp1 + 0.1 * temp2
         e1 = graph_E
         # e1 = self.E(e1_idx)
         x = self.bn0(e1)
@@ -128,25 +128,47 @@ class TuckER(torch.nn.Module):
 
         return pre, W_temp  # , DURA_loss
 
-    def forward_graph_entity(self, e1_idx, r_idx, i):    # 使用上下文的嵌入结果做预测。
+    def forward_graph_entity(self, e1_idx, r_idx, i):    # 使用上下文的嵌入结果做预测。  传入的都是以编号i为尾部实体的三元组。
         e1 = self.E(e1_idx)
-        x = e1
+        if e1.size(0) != 1:    # 只有一个的情况不用采样
+            x = self.bn0(e1)
+            x = self.input_dropout(x)
+        else:
+            x = e1
         x = x.view(-1, 1, e1.size(1))
         r_low = self.R_low(r_idx)
         W_mat = torch.mm(r_low, self.W_low.view(r_low.size(1), -1))
         W_mat = W_mat.view(-1, e1.size(1), e1.size(1))
         x = torch.bmm(x, W_mat)
-        x = x.view(-1, e1.size(1))  # 128*200 * 200*104
+        x = x.view(-1, e1.size(1))    # 128*200
+        if e1.size(0) != 1:
+            x = self.bn1(x)
+            x = self.hidden_dropout2(x)
         graph_E1 = x
 
         r_high = self.R_low(r_idx)
-        x = e1
+        if e1.size(0) != 1:
+            x = self.bn0(e1)
+            x = self.input_dropout(x)
+        else:
+            x = e1
         x = x.view(-1, 1, e1.size(1))
         W_mat = torch.mm(r_high, self.W_high.view(r_high.size(1), -1))
         W_mat = W_mat.view(-1, e1.size(1), e1.size(1))
         x = torch.bmm(x, W_mat)
         x = x.view(-1, e1.size(1))
+        if e1.size(0) != 1:
+            x = self.bn1(x)
+            x = self.hidden_dropout2(x)
         graph_E2 = x
         graph_E = (graph_E1 + graph_E2) / 2
-        graph_E = graph_E.mean(axis=0)    # 在列向量上做的均值操作。
+        if i == 50:
+            print(graph_E)
+        graph_E = graph_E.mean(axis=0, keepdim=True)    # 在列向量上做的均值操作。
         self.graph_E.weight.data[i] = graph_E   # 替换对应的embeddings
+
+    def neighbor_entity(self, e1_idx, r_idx, i):
+        e1 = self.E(e1_idx)
+        graph_E = e1
+        graph_E = graph_E.mean(axis=0, keepdim=True)    # 在列向量上做的均值操作。
+        self.graph_E.weight.data[i] = graph_E   #  替换对应的embeddings

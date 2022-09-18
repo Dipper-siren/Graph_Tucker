@@ -48,7 +48,7 @@ class Experiment:
                 if self.cuda:
                     e1_idx = e1_idx.cuda()
                     r_idx = r_idx.cuda()
-                model.forward_graph_entity(e1_idx, r_idx, i)
+                model.neighbor_entity(e1_idx, r_idx, i)
 
     def get_two_rela_idxs(self, data_idxs):
         two_rela_idxs = []
@@ -106,9 +106,9 @@ class Experiment:
         
         for i in range(0, len(test_data_idxs), self.batch_size):
             data_batch, _ = self.get_batch(er_vocab, test_data_idxs, i)
-            e1_idx = torch.tensor(data_batch[:,0])
-            r_idx = torch.tensor(data_batch[:,1])
-            e2_idx = torch.tensor(data_batch[:,2])
+            e1_idx = torch.tensor(data_batch[:, 0])
+            r_idx = torch.tensor(data_batch[:, 1])
+            e2_idx = torch.tensor(data_batch[:, 2])
             if self.cuda:
                 e1_idx = e1_idx.cuda()
                 r_idx = r_idx.cuda()
@@ -179,16 +179,16 @@ class Experiment:
             np.random.shuffle(train_data_idxs)
             er_vocab = self.get_er_vocab(train_data_idxs)
             er_vocab_pairs = list(er_vocab.keys())
-            self.get_graph_E(train_data_idxs, model)
+            self.get_graph_E(train_data_idxs, model)        # 计算每个实体的上下文。
             for j in range(0, len(er_vocab_pairs), self.batch_size):
                 data_batch, targets = self.get_batch(er_vocab, er_vocab_pairs, j)
                 opt.zero_grad()
-                e1_idx = torch.tensor(data_batch[:,0])
-                r_idx = torch.tensor(data_batch[:,1])  
+                e1_idx = torch.tensor(data_batch[:, 0])
+                r_idx = torch.tensor(data_batch[:, 1])
                 if self.cuda:
                     e1_idx = e1_idx.cuda()
                     r_idx = r_idx.cuda()
-                predictions, margin_loss = model.forward_2(e1_idx, r_idx)
+                predictions, margin_loss = model.forward_2(e1_idx, r_idx)      # 返回预测值和高低通滤波的损失 但不带损失权重。
                 if self.label_smoothing:
                     targets = ((1.0-self.label_smoothing)*targets) + (1.0/targets.size(1))
                 # triples = train_data_idxs[j:j+self.batch_size]
@@ -202,7 +202,6 @@ class Experiment:
                 # t = [x[2] for x in triples]
                 # t = torch.tensor(t)
                 # t = t.cuda()
-
                 loss = model.loss(predictions, targets) + self.loss_weight * margin_loss
                 loss.backward()
                 opt.step()
